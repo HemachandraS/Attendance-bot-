@@ -1,0 +1,7 @@
+dist/
+node_modules/
+logs/
+screenshots/
+coverage/
+session.json
+package-lock.json

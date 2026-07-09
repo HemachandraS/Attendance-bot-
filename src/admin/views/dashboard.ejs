@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR One Bot - Dashboard</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0b0f19 0%, #111827 50%, #1e1b4b 100%);
+      --accent-color: #6366f1;
+      --accent-hover: #4f46e5;
+      --card-bg: rgba(30, 41, 59, 0.6);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --neutral: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      background: var(--bg-gradient);
+      min-height: 100vh;
+      color: var(--text-main);
+      padding-bottom: 50px;
+    }
+
+    /* Navbar */
+    .navbar {
+      background: rgba(15, 23, 42, 0.8);
+      border-bottom: 1px solid var(--card-border);
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-brand {
+      font-size: 22px;
+      font-weight: 700;
+      background: linear-gradient(to right, #818cf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-brand span.bot-badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      background: rgba(99, 102, 241, 0.2);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      color: #a5b4fc;
+      border-radius: 12px;
+    }
+
+    .logout-btn {
+      padding: 8px 18px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.3s ease;
+    }
+
+    .logout-btn:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    /* Header */
+    .dashboard-header {
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    .dashboard-header h2 {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .dashboard-header p.date {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    /* Alerts */
+    .alert {
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 30px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: slideIn 0.4s ease-out;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .alert-success {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #a7f3d0;
+    }
+
+    .alert-error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+
+    /* Cards Grid */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 25px;
+      margin-bottom: 40px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: transform 0.3s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 15px;
+    }
+
+    .card-value {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .card-subtext {
+      font-size: 14px;
+      color: var(--text-muted);
+      word-break: break-word;
+    }
+
+    /* Badges */
+    .status-badge {
+      display: inline-block;
+      padding: 5px 12px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 20px;
+      text-transform: uppercase;
+    }
+
+    .badge-success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .badge-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .badge-warning {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .badge-neutral {
+      background: rgba(107, 114, 128, 0.15);
+      color: #d1d5db;
+      border: 1px solid rgba(107, 114, 128, 0.3);
+    }
+
+    /* Actions Panel */
+    .actions-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 30px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .panel-header {
+      margin-bottom: 25px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 15px;
+    }
+
+    .panel-header h3 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .buttons-container {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .action-form {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 15px 24px;
+      border-radius: 10px;
+      border: none;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-stop {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+
+    .btn-stop:hover {
+      background: var(--danger);
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-enable {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #a7f3d0;
+    }
+
+    .btn-enable:hover {
+      background: var(--success);
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-test {
+      background: linear-gradient(135deg, var(--accent-color) 0%, #a855f7 100%);
+      color: #fff;
+    }
+
+    .btn-test:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    }
+
+    /* Spinner */
+    .spinner {
+      display: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading .spinner {
+      display: inline-block;
+    }
+    .loading span {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .navbar {
+        padding: 15px 20px;
+      }
+      .container {
+        margin: 20px auto;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="nav-brand">
+      HR One Bot
+      <span class="bot-badge">v1.1.0</span>
+    </div>
+    <a href="/logout" class="logout-btn">Log Out</a>
+  </header>
+
+  <!-- Container -->
+  <main class="container">
+    
+    <!-- Dashboard Header -->
+    <div class="dashboard-header">
+      <div>
+        <h2>Control Panel</h2>
+      </div>
+      <p class="date">Today: <%= todayDate %></p>
+    </div>
+
+    <!-- Alert Notifications -->
+    <% if (successMessage) { %>
+      <div class="alert alert-success">
+        <strong>Success:</strong> <%= successMessage %>
+      </div>
+    <% } %>
+
+    <% if (errorMessage) { %>
+      <div class="alert alert-error">
+        <strong>Error:</strong> <%= errorMessage %>
+      </div>
+    <% } %>
+
+    <!-- Status Cards Grid -->
+    <section class="cards-grid">
+      <!-- Card 1: Today's Status -->
+      <div class="card">
+        <div class="card-title">Today's Status</div>
+        <div class="card-value">
+          <% if (isBotEnabled) { %>
+            <span class="status-badge badge-success">Enabled</span>
+          <% } else { %>
+            <span class="status-badge badge-danger">Disabled</span>
+          <% } %>
+        </div>
+        <p class="card-subtext">
+          <% if (isBotEnabled) { %>
+            The bot will automatically run and mark attendance today.
+          <% } else { %>
+            Scheduled execution is disabled. The bot will skip runs today.
+          <% } %>
+        </p>
+      </div>
+
+      <!-- Card 2: Last Execution -->
+      <div class="card">
+        <div class="card-title">Last Execution</div>
+        <div class="card-value">
+          <% if (lastRunStatus === 'Success' || lastRunStatus.startsWith('Success')) { %>
+            <span class="status-badge badge-success"><%= lastRunStatus %></span>
+          <% } else if (lastRunStatus === 'Failed') { %>
+            <span class="status-badge badge-danger">Failed</span>
+          <% } else if (lastRunStatus === 'Skipped') { %>
+            <span class="status-badge badge-warning">Skipped</span>
+          <% } else { %>
+            <span class="status-badge badge-neutral"><%= lastRunStatus %></span>
+          <% } %>
+        </div>
+        <p class="card-subtext">
+          <strong>Time:</strong> <%= lastRunTime %><br>
+          <strong>Detail:</strong> <%= lastRunMessage %>
+        </p>
+      </div>
+
+      <!-- Card 3: Next Scheduled Run -->
+      <div class="card">
+        <div class="card-title">Next Scheduled Run</div>
+        <div class="card-value" style="font-size: 20px; word-break: break-word; line-height: 1.4;">
+          <%= nextScheduledRun %>
+        </div>
+        <p class="card-subtext">
+          Runs automatically at 10:00 AM IST (Monday to Friday) via GitHub Actions.
+        </p>
+      </div>
+    </section>
+
+    <!-- Actions Panel -->
+    <section class="actions-panel">
+      <div class="panel-header">
+        <h3>Execution Controls</h3>
+      </div>
+      
+      <div class="buttons-container">
+        <!-- Stop/Enable Button Toggle -->
+        <% if (isBotEnabled) { %>
+          <form action="/actions/stop" method="POST" class="action-form">
+            <button type="submit" class="btn btn-stop">
+              STOP FOR TODAY
+            </button>
+          </form>
+        <% } else { %>
+          <form action="/actions/enable" method="POST" class="action-form">
+            <button type="submit" class="btn btn-enable">
+              ENABLE FOR TODAY
+            </button>
+          </form>
+        <% } %>
+
+        <!-- Test Run Button -->
+        <form action="/actions/test" method="POST" class="action-form" onsubmit="triggerLoading(this)">
+          <button type="submit" id="test-run-btn" class="btn btn-test">
+            <div class="spinner"></div>
+            <span>TEST RUN NOW</span>
+          </button>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    function triggerLoading(form) {
+      const button = form.querySelector('button');
+      button.classList.add('loading');
+      button.disabled = true;
+      
+      // Disable the other button to prevent double submits
+      const stopEnableBtn = document.querySelector('.btn-stop, .btn-enable');
+      if (stopEnableBtn) {
+        stopEnableBtn.disabled = true;
+      }
+    }
+  </script>
+
+</body>
+</html>
