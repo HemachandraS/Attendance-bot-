@@ -37,16 +37,11 @@ jobs:
       - name: Install Playwright Chromium Browser
         run: npx playwright install chromium --with-deps
 
+      - name: Create Env File
+        run: |
+          echo "${{ secrets.APP_ENV }}" > .env
+
       - name: Run Attendance Bot
-        env:
-          HRONE_URL: ${{ secrets.HRONEURL }}
-          USERNAME: ${{ secrets.USERNAME }}
-          PASSWORD: ${{ secrets.PASSWORD }}
-          HEADLESS: 'true'
-          TIMEZONE: 'Asia/Kolkata'
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAMBOTTOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAMCHATID }}
-          ENABLE_NOTIFICATIONS: 'true'
         run: |
           npm run build
           npm start
