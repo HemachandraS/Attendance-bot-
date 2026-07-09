@@ -60,7 +60,7 @@ export function startAdminServer(
 
   // Start background command polling if notifications are enabled
   if (config.ENABLE_NOTIFICATIONS) {
-    const telegramCmdService = new TelegramCommandService(config, logger, storageService, executor);
+    const telegramCmdService = new TelegramCommandService(config, logger, storageService);
     logger.info('Starting background Telegram command sync loop (15s interval)...');
 
     // Run an initial sync immediately upon server start

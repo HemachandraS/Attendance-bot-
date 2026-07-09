@@ -75,7 +75,7 @@ describe('TelegramNotificationService', () => {
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: expect.stringContaining('Attendance Marked Successfully'),
+        body: expect.stringContaining('Attendance marked successfully'),
       }),
     );
   });

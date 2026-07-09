@@ -1,5 +1,4 @@
 import { IConfig, ILogger, IStorageService } from '../types';
-import { AttendanceExecutor } from '../executor';
 import { retryOperation } from '../retry';
 
 export class TelegramCommandService {
@@ -7,15 +6,17 @@ export class TelegramCommandService {
     private readonly config: IConfig,
     private readonly logger: ILogger,
     private readonly storageService: IStorageService,
-    private readonly executor: AttendanceExecutor,
   ) {}
 
   /**
-   * Polls Telegram getUpdates API for any new messages/commands and processes them.
+   * Polls Telegram updates. Checks if there is an unprocessed '/leave' command sent today.
+   * If found:
+   *  - Returns the details of the command (received time, etc.).
+   *  - Updates the offset to skip reprocessing.
    */
-  public async pollForUpdates(): Promise<void> {
+  public async checkForLeaveCommand(): Promise<{ receivedAt: Date; formattedTime: string } | null> {
     if (!this.config.ENABLE_NOTIFICATIONS) {
-      return;
+      return null;
     }
 
     const token = this.config.TELEGRAM_BOT_TOKEN;
@@ -26,7 +27,9 @@ export class TelegramCommandService {
     const url = `https://api.telegram.org/bot${token}/getUpdates?offset=${offset}&timeout=5`;
 
     try {
-      this.logger.debug(`Polling Telegram updates with offset ${offset}...`);
+      this.logger.debug(
+        `Polling Telegram updates in checkForLeaveCommand with offset ${offset}...`,
+      );
 
       const updates = await retryOperation(
         async () => {
@@ -43,11 +46,14 @@ export class TelegramCommandService {
         [1000, 2000],
       );
 
-      // Update sync connection state
+      // Connection is successful
       await this.storageService.setTelegramMetadata({
         botConnected: true,
         lastSyncTime: new Date().toISOString(),
       });
+
+      let leaveCommandFound: { receivedAt: Date; formattedTime: string; updateId: number } | null =
+        null;
 
       for (const update of updates) {
         const updateId = update.update_id;
@@ -61,128 +67,109 @@ export class TelegramCommandService {
         const chatId = String(message.chat.id).trim();
         const text = message.text.trim();
         const receivedAt = new Date(message.date * 1000);
-        const processedAt = new Date();
 
-        // Security Check: Only accept messages originating from the configured chat ID
+        // Security Check: Only accept messages from configured chat ID
         if (chatId !== targetChatId) {
-          this.logger.warn(
-            `Security Warning: Unauthorized Telegram command attempt from Chat ID: "${chatId}" (Expected: "${targetChatId}"). Content: "${text}"`,
-          );
           await this.storageService.setTelegramMetadata({ lastProcessedUpdateId: updateId });
           continue;
         }
 
-        this.logger.info(`Processing authorized Telegram command: "${text}"`);
-        await this.processCommand(Number(chatId), text, receivedAt, processedAt);
+        const cleanCmd = text.toLowerCase().trim();
+
+        // Check if the command is "/leave" or "leave"
+        if (cleanCmd === '/leave' || cleanCmd === 'leave') {
+          const now = new Date();
+
+          // Verify if sent today in target timezone
+          const getLocalDateString = (d: Date, tz: string) =>
+            d.toLocaleDateString('en-US', {
+              timeZone: tz,
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+            });
+
+          const msgDateStr = getLocalDateString(receivedAt, this.config.TIMEZONE);
+          const todayDateStr = getLocalDateString(now, this.config.TIMEZONE);
+
+          if (msgDateStr === todayDateStr) {
+            const formattedTime = receivedAt.toLocaleTimeString('en-IN', {
+              timeZone: this.config.TIMEZONE,
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            });
+
+            leaveCommandFound = { receivedAt, formattedTime, updateId };
+          }
+        }
+
+        // Keep updating offset to mark all processed messages (including other non-matching messages from target user)
         await this.storageService.setTelegramMetadata({ lastProcessedUpdateId: updateId });
       }
+
+      if (leaveCommandFound) {
+        this.logger.info(
+          `Found unprocessed today's /leave command received at ${leaveCommandFound.formattedTime}`,
+        );
+        return {
+          receivedAt: leaveCommandFound.receivedAt,
+          formattedTime: leaveCommandFound.formattedTime,
+        };
+      }
     } catch (error) {
-      this.logger.error('Failed to retrieve Telegram updates', error);
+      this.logger.error('Failed to check for Telegram /leave command', error);
       await this.storageService.setTelegramMetadata({
         botConnected: false,
         lastSyncTime: new Date().toISOString(),
       });
     }
+
+    return null;
   }
 
   /**
-   * Parses and executes matched commands, writing to storage and acknowledging via chat reply.
+   * For backward compatibility and background sync polling in Server Mode.
    */
-  private async processCommand(
-    chatId: number,
-    text: string,
-    receivedAt: Date,
-    processedAt: Date,
-  ): Promise<void> {
-    const cleanCmd = text.toLowerCase().replace(/^\//, '').trim();
-
-    if (cleanCmd === 'leave') {
+  public async pollForUpdates(): Promise<void> {
+    const leaveCmd = await this.checkForLeaveCommand();
+    if (leaveCmd) {
+      // Set skip state for today
       await this.storageService.setTodayState(false, 'telegram');
-      await this.storageService.addHistoryEntry('Leave', 'Telegram', receivedAt, processedAt);
+
+      // Update command details
       await this.storageService.setTelegramMetadata({
         lastCommand: 'Leave',
-        lastCommandTime: processedAt.toISOString(),
+        lastCommandTime: leaveCmd.receivedAt.toISOString(),
       });
-      await this.sendReply(chatId, '✅ Attendance has been disabled for today.');
-    } else if (cleanCmd === 'enable') {
-      await this.storageService.setTodayState(true, 'telegram');
-      await this.storageService.addHistoryEntry('Enable', 'Telegram', receivedAt, processedAt);
-      await this.storageService.setTelegramMetadata({
-        lastCommand: 'Enable',
-        lastCommandTime: processedAt.toISOString(),
-      });
-      await this.sendReply(chatId, '✅ Attendance has been enabled for today.');
-    } else if (cleanCmd === 'status') {
-      const todayState = await this.storageService.getTodayState();
-      const lastRun = await this.storageService.getLastRun();
-      const nextRunTime = this.calculateNextRun();
 
-      let lastRunFormatted = 'Never Executed';
-      let lastResultFormatted = 'N/A';
+      // Send the skip notification if not already sent
+      // Check history to see if we already sent this skip notification to avoid spamming
+      const history = await this.storageService.getHistory();
+      const alreadySent = history.some(
+        (h) =>
+          h.action === 'Leave (/leave received)' &&
+          h.receivedAt === leaveCmd.receivedAt.toISOString(),
+      );
 
-      if (lastRun) {
-        lastRunFormatted = new Date(lastRun.timestamp).toLocaleString('en-IN', {
-          timeZone: this.config.TIMEZONE,
-        });
-        lastResultFormatted = lastRun.status;
-        if (lastRun.message) {
-          lastResultFormatted += ` (${lastRun.message})`;
-        }
+      if (!alreadySent) {
+        await this.storageService.addHistoryEntry(
+          'Leave (/leave received)',
+          'Telegram',
+          leaveCmd.receivedAt,
+          new Date(),
+        );
+
+        const skipMsg = `⏸ Attendance skipped.\n\nReason:\n/leave received at ${leaveCmd.formattedTime}.`;
+        await this.sendReply(Number(this.config.TELEGRAM_CHAT_ID), skipMsg);
       }
-
-      const statusMsg =
-        `Today's Attendance\n\n` +
-        `Status:\n${todayState.enabled ? 'Enabled' : 'Disabled'}\n\n` +
-        `Last Run:\n${lastRunFormatted}\n\n` +
-        `Last Result:\n${lastResultFormatted}\n\n` +
-        `Next Scheduled Run:\n${nextRunTime}`;
-
-      await this.storageService.addHistoryEntry('Status', 'Telegram', receivedAt, processedAt);
-      await this.storageService.setTelegramMetadata({
-        lastCommand: 'Status',
-        lastCommandTime: processedAt.toISOString(),
-      });
-      await this.sendReply(chatId, statusMsg);
-    } else if (cleanCmd === 'run') {
-      await this.storageService.addHistoryEntry('Run', 'Telegram', receivedAt, processedAt);
-      await this.storageService.setTelegramMetadata({
-        lastCommand: 'Run',
-        lastCommandTime: processedAt.toISOString(),
-      });
-      await this.sendReply(chatId, '🧪 Starting Test Run...');
-
-      try {
-        await this.executor.execute(true);
-        await this.sendReply(chatId, '✅ Attendance marked successfully.');
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        this.logger.error('Telegram-triggered manual execution failed', err);
-        await this.sendReply(chatId, `❌ Attendance failed: ${errorMsg}`);
-      }
-    } else if (cleanCmd === 'help') {
-      const helpMsg =
-        `Available Commands:\n` +
-        `Leave - Disable today's execution\n` +
-        `Enable - Enable today's execution\n` +
-        `Status - View current status\n` +
-        `Run - Trigger manual check-in\n` +
-        `Help - View help menu`;
-
-      await this.storageService.addHistoryEntry('Help', 'Telegram', receivedAt, processedAt);
-      await this.storageService.setTelegramMetadata({
-        lastCommand: 'Help',
-        lastCommandTime: processedAt.toISOString(),
-      });
-      await this.sendReply(chatId, helpMsg);
-    } else {
-      await this.sendReply(chatId, `❓ Unknown command. Type Help to see available commands.`);
     }
   }
 
   /**
    * Helper to dispatch response message back to the active Telegram Chat ID.
    */
-  private async sendReply(chatId: number, message: string): Promise<boolean> {
+  public async sendReply(chatId: number, message: string): Promise<boolean> {
     const token = this.config.TELEGRAM_BOT_TOKEN;
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
@@ -212,34 +199,5 @@ export class TelegramCommandService {
       this.logger.error(`Failed to send Telegram reply to chat: ${chatId}`, err);
       return false;
     }
-  }
-
-  /**
-   * Calculates next scheduled weekday execution at 10:00 AM.
-   */
-  private calculateNextRun(): string {
-    const now = new Date();
-    const target = new Date();
-    target.setHours(10, 0, 0, 0);
-
-    if (now.getTime() >= target.getTime()) {
-      target.setDate(target.getDate() + 1);
-    }
-
-    while (target.getDay() === 0 || target.getDay() === 6) {
-      target.setDate(target.getDate() + 1);
-    }
-
-    return (
-      target.toLocaleString('en-IN', {
-        timeZone: this.config.TIMEZONE,
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }) + ' IST'
-    );
   }
 }

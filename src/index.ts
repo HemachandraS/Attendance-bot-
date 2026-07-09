@@ -35,14 +35,30 @@ async function main() {
     logger.info('Starting HR One Attendance Bot in SCHEDULER Mode...');
     try {
       if (config.ENABLE_NOTIFICATIONS) {
-        const telegramCommandService = new TelegramCommandService(
-          config,
-          logger,
-          storageService,
-          executor,
-        );
-        logger.info('Syncing latest Telegram commands before check-in execution...');
-        await telegramCommandService.pollForUpdates();
+        const telegramCommandService = new TelegramCommandService(config, logger, storageService);
+        logger.info("Checking for today's /leave override command before execution...");
+        const leaveCommand = await telegramCommandService.checkForLeaveCommand();
+        if (leaveCommand) {
+          logger.info(
+            `Scheduler Skipped: Today's execution was skipped because /leave was received.`,
+          );
+          await storageService.setTodayState(false, 'telegram');
+          await storageService.addHistoryEntry(
+            'Leave (/leave received)',
+            'Telegram',
+            leaveCommand.receivedAt,
+            new Date(),
+          );
+          await storageService.setLastRun(
+            'Skipped',
+            `Attendance skipped because /leave was received at ${leaveCommand.formattedTime}.`,
+          );
+
+          // Send the skip notification
+          const skipMsg = `⏸ Attendance skipped.\n\nReason:\n/leave received at ${leaveCommand.formattedTime}.`;
+          await telegramCommandService.sendReply(Number(config.TELEGRAM_CHAT_ID), skipMsg);
+          return;
+        }
       }
       await executor.execute(false);
     } catch (runError) {

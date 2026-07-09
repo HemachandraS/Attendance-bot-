@@ -38,9 +38,9 @@ export class TelegramNotificationService implements INotificationService {
     const formattedTime = this.getFormattedTime(time);
     let text = '';
     if (isAlreadyMarked) {
-      text = `ℹ️ <b>HR One Attendance</b>\n\nToday's attendance was already marked.\n\nTime:\n${formattedTime}`;
+      text = `ℹ️ <b>HR One Attendance</b>\n\nToday's attendance was already marked.`;
     } else {
-      text = `✅ <b>HR One Attendance</b>\n\nStatus:\nAttendance Marked Successfully\n\nTime:\n${formattedTime}\n\nEnvironment:\nGitHub Actions`;
+      text = `✅ Attendance marked successfully.`;
     }
 
     return this.sendNotificationFlow(text, screenshotPath, formattedTime);

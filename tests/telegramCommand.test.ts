@@ -1,12 +1,10 @@
 import { TelegramCommandService } from '../src/telegram/TelegramCommandService';
-import { AttendanceExecutor } from '../src/executor';
 import { IConfig, ILogger, IStorageService } from '../src/types';
 
-describe('TelegramCommandService', () => {
+describe('TelegramCommandService - Simplified Override Check', () => {
   let mockConfig: IConfig;
   let mockLogger: ILogger;
   let mockStorage: jest.Mocked<IStorageService>;
-  let mockExecutor: jest.Mocked<AttendanceExecutor>;
   let service: TelegramCommandService;
   let fetchSpy: jest.Mock;
   let originalFetch: typeof globalThis.fetch;
@@ -47,11 +45,7 @@ describe('TelegramCommandService', () => {
       addHistoryEntry: jest.fn(),
     } as unknown as jest.Mocked<IStorageService>;
 
-    mockExecutor = {
-      execute: jest.fn(),
-    } as unknown as jest.Mocked<AttendanceExecutor>;
-
-    service = new TelegramCommandService(mockConfig, mockLogger, mockStorage, mockExecutor);
+    service = new TelegramCommandService(mockConfig, mockLogger, mockStorage);
 
     originalFetch = globalThis.fetch;
     fetchSpy = jest.fn().mockResolvedValue({
@@ -68,15 +62,16 @@ describe('TelegramCommandService', () => {
     jest.restoreAllMocks();
   });
 
-  it('should skip polling if ENABLE_NOTIFICATIONS is false', async () => {
+  it('should return null if ENABLE_NOTIFICATIONS is false', async () => {
     mockConfig.ENABLE_NOTIFICATIONS = false;
 
-    await service.pollForUpdates();
+    const result = await service.checkForLeaveCommand();
 
+    expect(result).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('should fetch updates, ignore unauthorized chat IDs, and update metadata offset', async () => {
+  it('should ignore updates from unauthorized chat IDs', async () => {
     mockStorage.getTelegramMetadata.mockResolvedValue({
       lastProcessedUpdateId: 100,
       lastSyncTime: 'N/A',
@@ -93,31 +88,24 @@ describe('TelegramCommandService', () => {
             update_id: 101,
             message: {
               chat: { id: 99999 }, // Unauthorized Chat ID
-              text: 'Leave',
-              date: 1719878400,
+              text: '/leave',
+              date: Math.floor(Date.now() / 1000), // Today
             },
           },
         ],
       }),
     } as unknown as Response);
 
-    await service.pollForUpdates();
+    const result = await service.checkForLeaveCommand();
 
-    // Verify security warning is logged
-    expect(mockLogger.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Unauthorized Telegram command attempt from Chat ID: "99999"'),
-    );
-
-    // Verify today's state was NOT updated
-    expect(mockStorage.setTodayState).not.toHaveBeenCalled();
-
-    // Verify lastProcessedUpdateId is incremented anyway to skip this update next time
+    expect(result).toBeNull();
+    // Offset is still incremented to skip the message next time
     expect(mockStorage.setTelegramMetadata).toHaveBeenCalledWith({
       lastProcessedUpdateId: 101,
     });
   });
 
-  it('should process authorized "Leave" command and disable today state', async () => {
+  it('should ignore other messages from the target chat ID', async () => {
     mockStorage.getTelegramMetadata.mockResolvedValue({
       lastProcessedUpdateId: 200,
       lastSyncTime: 'N/A',
@@ -133,35 +121,24 @@ describe('TelegramCommandService', () => {
           {
             update_id: 201,
             message: {
-              chat: { id: 123456 }, // Authorized
-              text: 'Leave',
-              date: 1719878400,
+              chat: { id: 123456 },
+              text: 'hello bot',
+              date: Math.floor(Date.now() / 1000),
             },
           },
         ],
       }),
     } as unknown as Response);
 
-    await service.pollForUpdates();
+    const result = await service.checkForLeaveCommand();
 
-    expect(mockStorage.setTodayState).toHaveBeenCalledWith(false, 'telegram');
-    expect(mockStorage.addHistoryEntry).toHaveBeenCalledWith(
-      'Leave',
-      'Telegram',
-      expect.any(Date),
-      expect.any(Date),
-    );
-
-    // Verify it replied with confirmation
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('sendMessage'),
-      expect.objectContaining({
-        body: expect.stringContaining('Attendance has been disabled for today.'),
-      }),
-    );
+    expect(result).toBeNull();
+    expect(mockStorage.setTelegramMetadata).toHaveBeenCalledWith({
+      lastProcessedUpdateId: 201,
+    });
   });
 
-  it('should process authorized "Enable" command and activate today state', async () => {
+  it('should return command details if an unprocessed /leave command was sent today from authorized chat ID', async () => {
     mockStorage.getTelegramMetadata.mockResolvedValue({
       lastProcessedUpdateId: 300,
       lastSyncTime: 'N/A',
@@ -169,6 +146,8 @@ describe('TelegramCommandService', () => {
       lastCommand: 'None',
       lastCommandTime: 'N/A',
     });
+
+    const nowSeconds = Math.floor(Date.now() / 1000);
 
     fetchSpy.mockResolvedValue({
       ok: true,
@@ -178,34 +157,25 @@ describe('TelegramCommandService', () => {
             update_id: 301,
             message: {
               chat: { id: 123456 },
-              text: '/Enable', // case-insensitive, with slash
-              date: 1719878400,
+              text: '/leave',
+              date: nowSeconds,
             },
           },
         ],
       }),
     } as unknown as Response);
 
-    await service.pollForUpdates();
+    const result = await service.checkForLeaveCommand();
 
-    expect(mockStorage.setTodayState).toHaveBeenCalledWith(true, 'telegram');
-    expect(mockStorage.addHistoryEntry).toHaveBeenCalledWith(
-      'Enable',
-      'Telegram',
-      expect.any(Date),
-      expect.any(Date),
-    );
-
-    // Verify reply details
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('sendMessage'),
-      expect.objectContaining({
-        body: expect.stringContaining('Attendance has been enabled for today.'),
-      }),
-    );
+    expect(result).not.toBeNull();
+    expect(result?.receivedAt).toBeInstanceOf(Date);
+    expect(result?.formattedTime).toMatch(/\d{2}:\d{2} [aApP][mM]/); // HH:MM AM/PM format
+    expect(mockStorage.setTelegramMetadata).toHaveBeenCalledWith({
+      lastProcessedUpdateId: 301,
+    });
   });
 
-  it('should process authorized "Status" command and reply status details', async () => {
+  it('should return null if /leave command was sent on a previous day', async () => {
     mockStorage.getTelegramMetadata.mockResolvedValue({
       lastProcessedUpdateId: 400,
       lastSyncTime: 'N/A',
@@ -214,17 +184,8 @@ describe('TelegramCommandService', () => {
       lastCommandTime: 'N/A',
     });
 
-    mockStorage.getTodayState.mockResolvedValue({
-      enabled: false,
-      updatedBy: 'telegram',
-      updatedAt: '2026-07-09T09:30:00Z',
-    });
-
-    mockStorage.getLastRun.mockResolvedValue({
-      timestamp: '2026-07-09T09:00:00Z',
-      status: 'Success',
-      message: 'Marked successfully',
-    });
+    // 2 days ago
+    const twoDaysAgoSeconds = Math.floor((Date.now() - 2 * 24 * 60 * 60 * 1000) / 1000);
 
     fetchSpy.mockResolvedValue({
       ok: true,
@@ -234,158 +195,19 @@ describe('TelegramCommandService', () => {
             update_id: 401,
             message: {
               chat: { id: 123456 },
-              text: 'status',
-              date: 1719878400,
+              text: '/leave',
+              date: twoDaysAgoSeconds,
             },
           },
         ],
       }),
     } as unknown as Response);
 
-    await service.pollForUpdates();
+    const result = await service.checkForLeaveCommand();
 
-    expect(mockStorage.addHistoryEntry).toHaveBeenCalledWith(
-      'Status',
-      'Telegram',
-      expect.any(Date),
-      expect.any(Date),
-    );
-
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('sendMessage'),
-      expect.objectContaining({
-        body: expect.stringContaining('Status:\\nDisabled'),
-      }),
-    );
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('sendMessage'),
-      expect.objectContaining({
-        body: expect.stringContaining('Last Result:\\nSuccess (Marked successfully)'),
-      }),
-    );
-  });
-
-  it('should process authorized "Run" command, initiate manual execution, and reply success', async () => {
-    mockStorage.getTelegramMetadata.mockResolvedValue({
-      lastProcessedUpdateId: 500,
-      lastSyncTime: 'N/A',
-      botConnected: true,
-      lastCommand: 'None',
-      lastCommandTime: 'N/A',
+    expect(result).toBeNull();
+    expect(mockStorage.setTelegramMetadata).toHaveBeenCalledWith({
+      lastProcessedUpdateId: 401,
     });
-
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({
-        result: [
-          {
-            update_id: 501,
-            message: {
-              chat: { id: 123456 },
-              text: 'run',
-              date: 1719878400,
-            },
-          },
-        ],
-      }),
-    } as unknown as Response);
-
-    mockExecutor.execute.mockResolvedValue();
-
-    await service.pollForUpdates();
-
-    // Verify it triggers executor.execute(true) -> manual test settings override
-    expect(mockExecutor.execute).toHaveBeenCalledWith(true);
-
-    // Verify startup reply sent
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('sendMessage'),
-      expect.objectContaining({
-        body: expect.stringContaining('Starting Test Run...'),
-      }),
-    );
-
-    // Verify success confirmation sent
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('sendMessage'),
-      expect.objectContaining({
-        body: expect.stringContaining('Attendance marked successfully.'),
-      }),
-    );
-  });
-
-  it('should process authorized "Run" command and reply failure details if execution throws', async () => {
-    mockStorage.getTelegramMetadata.mockResolvedValue({
-      lastProcessedUpdateId: 600,
-      lastSyncTime: 'N/A',
-      botConnected: true,
-      lastCommand: 'None',
-      lastCommandTime: 'N/A',
-    });
-
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({
-        result: [
-          {
-            update_id: 601,
-            message: {
-              chat: { id: 123456 },
-              text: 'run',
-              date: 1719878400,
-            },
-          },
-        ],
-      }),
-    } as unknown as Response);
-
-    mockExecutor.execute.mockRejectedValue(new Error('Browser connection crashed'));
-
-    await service.pollForUpdates();
-
-    expect(mockExecutor.execute).toHaveBeenCalledWith(true);
-
-    // Verify failure details reply sent
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('sendMessage'),
-      expect.objectContaining({
-        body: expect.stringContaining('Attendance failed: Browser connection crashed'),
-      }),
-    );
-  });
-
-  it('should process authorized "Help" command and display manual text options', async () => {
-    mockStorage.getTelegramMetadata.mockResolvedValue({
-      lastProcessedUpdateId: 700,
-      lastSyncTime: 'N/A',
-      botConnected: true,
-      lastCommand: 'None',
-      lastCommandTime: 'N/A',
-    });
-
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValue({
-        result: [
-          {
-            update_id: 701,
-            message: {
-              chat: { id: 123456 },
-              text: 'Help',
-              date: 1719878400,
-            },
-          },
-        ],
-      }),
-    } as unknown as Response);
-
-    await service.pollForUpdates();
-
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('sendMessage'),
-      expect.objectContaining({
-        body: expect.stringContaining("Leave - Disable today's execution"),
-      }),
-    );
   });
 });
