@@ -46,7 +46,7 @@ describe('TelegramNotificationService', () => {
       ok: true,
       text: jest.fn().mockResolvedValue('ok'),
     } as unknown as Response);
-    globalThis.fetch = fetchSpy as any;
+    globalThis.fetch = fetchSpy as unknown as typeof globalThis.fetch;
 
     jest.spyOn(fs, 'existsSync').mockReturnValue(true);
     jest.spyOn(fs, 'readFileSync').mockReturnValue(Buffer.from('mock_image_binary'));

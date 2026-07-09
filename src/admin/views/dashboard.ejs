@@ -348,6 +348,68 @@
         margin: 20px auto;
       }
     }
+
+    /* History Panel */
+    .history-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 30px;
+      margin-top: 40px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 15px 20px;
+      border-radius: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .history-item-left {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .history-action {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .history-source {
+      font-size: 12px;
+      color: #a5b4fc;
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      padding: 2px 8px;
+      border-radius: 8px;
+      align-self: flex-start;
+    }
+
+    .history-item-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
   </style>
 </head>
 <body>
@@ -436,6 +498,23 @@
           Runs automatically at 10:00 AM IST (Monday to Friday) via GitHub Actions.
         </p>
       </div>
+
+      <!-- Card 4: Telegram Status -->
+      <div class="card">
+        <div class="card-title">Telegram Status</div>
+        <div class="card-value">
+          <% if (telegramStatus.botConnected) { %>
+            <span class="status-badge badge-success">Connected</span>
+          <% } else { %>
+            <span class="status-badge badge-danger">Disconnected</span>
+          <% } %>
+        </div>
+        <p class="card-subtext" style="line-height: 1.5;">
+          <strong>Last Command:</strong> <%= telegramStatus.lastCommand %><br>
+          <strong>Command Time:</strong> <%= telegramStatus.lastCommandTime %><br>
+          <strong>Last Sync:</strong> <%= telegramStatus.lastSyncTime %>
+        </p>
+      </div>
     </section>
 
     <!-- Actions Panel -->
@@ -467,6 +546,33 @@
             <span>TEST RUN NOW</span>
           </button>
         </form>
+      </div>
+    </section>
+
+    <!-- History Logs Panel -->
+    <section class="history-panel">
+      <div class="panel-header">
+        <h3>Command & Action History</h3>
+      </div>
+      <div class="history-list">
+        <% if (history && history.length > 0) { %>
+          <% history.forEach(function(item) { %>
+            <div class="history-item">
+              <div class="history-item-left">
+                <span class="history-action"><%= item.action %></span>
+                <span class="history-source"><%= item.source %></span>
+              </div>
+              <div class="history-item-right">
+                <div><strong>Received:</strong> <%= item.receivedFormatted %></div>
+                <div><strong>Processed:</strong> <%= item.processedFormatted %></div>
+              </div>
+            </div>
+          <% }); %>
+        <% } else { %>
+          <div style="color: var(--text-muted); text-align: center; padding: 20px;">
+            No toggle actions or command logs recorded yet.
+          </div>
+        <% } %>
       </div>
     </section>
 

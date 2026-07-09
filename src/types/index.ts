@@ -55,11 +55,43 @@ export interface LastRunInfo {
   message?: string;
 }
 
+export interface TodayState {
+  enabled: boolean;
+  updatedBy: 'telegram' | 'dashboard' | 'scheduler';
+  updatedAt: string;
+}
+
+export interface TelegramMetadata {
+  lastProcessedUpdateId: number;
+  lastSyncTime: string;
+  botConnected: boolean;
+  lastCommand: string;
+  lastCommandTime: string;
+}
+
+export interface HistoryEntry {
+  action: string;
+  source: 'Telegram' | 'Dashboard';
+  receivedAt: string;
+  processedAt: string;
+}
+
 export interface IStorageService {
   isDateSkipped(dateStr: string): Promise<boolean>;
   setDateSkip(dateStr: string, skip: boolean): Promise<void>;
   getLastRun(): Promise<LastRunInfo | null>;
   setLastRun(status: string, message?: string): Promise<void>;
+  getTodayState(): Promise<TodayState>;
+  setTodayState(enabled: boolean, updatedBy: 'telegram' | 'dashboard' | 'scheduler'): Promise<void>;
+  getTelegramMetadata(): Promise<TelegramMetadata | null>;
+  setTelegramMetadata(metadata: Partial<TelegramMetadata>): Promise<void>;
+  getHistory(): Promise<HistoryEntry[]>;
+  addHistoryEntry(
+    action: string,
+    source: 'Telegram' | 'Dashboard',
+    receivedAt: Date,
+    processedAt: Date,
+  ): Promise<void>;
 }
 
 export interface INotificationService {

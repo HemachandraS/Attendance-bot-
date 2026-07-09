@@ -65,6 +65,51 @@ export class AdminController {
     const errorMsg = req.query.error ? String(req.query.error) : null;
     const nextScheduled = this.calculateNextRun();
 
+    const telegramMetadata = await this.storageService.getTelegramMetadata();
+    const rawHistory = await this.storageService.getHistory();
+
+    const formattedHistory = rawHistory
+      .map((entry) => {
+        const received = new Date(entry.receivedAt).toLocaleString('en-IN', {
+          timeZone: this.config.TIMEZONE,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+        const processed = new Date(entry.processedAt).toLocaleString('en-IN', {
+          timeZone: this.config.TIMEZONE,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+        return {
+          ...entry,
+          receivedFormatted: received,
+          processedFormatted: processed,
+        };
+      })
+      .slice(-10)
+      .reverse();
+
+    const lastSyncTimeFormatted = telegramMetadata?.lastSyncTime
+      ? new Date(telegramMetadata.lastSyncTime).toLocaleString('en-IN', {
+          timeZone: this.config.TIMEZONE,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      : 'N/A';
+
+    const lastCommandTimeFormatted =
+      telegramMetadata?.lastCommandTime && telegramMetadata.lastCommandTime !== 'N/A'
+        ? new Date(telegramMetadata.lastCommandTime).toLocaleString('en-IN', {
+            timeZone: this.config.TIMEZONE,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          })
+        : 'N/A';
+
     res.render('dashboard', {
       todayDate: new Date().toLocaleDateString('en-IN', {
         weekday: 'long',
@@ -81,6 +126,13 @@ export class AdminController {
       nextScheduledRun: nextScheduled,
       successMessage: successMsg,
       errorMessage: errorMsg,
+      telegramStatus: {
+        botConnected: this.config.ENABLE_NOTIFICATIONS && (telegramMetadata?.botConnected ?? true),
+        lastCommand: telegramMetadata?.lastCommand || 'None',
+        lastCommandTime: lastCommandTimeFormatted,
+        lastSyncTime: lastSyncTimeFormatted,
+      },
+      history: formattedHistory,
     });
   }
 

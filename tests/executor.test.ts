@@ -74,6 +74,14 @@ describe('AttendanceExecutor', () => {
       setDateSkip: jest.fn().mockResolvedValue(undefined),
       getLastRun: jest.fn().mockResolvedValue(null),
       setLastRun: jest.fn().mockResolvedValue(undefined),
+      getTodayState: jest
+        .fn()
+        .mockResolvedValue({ enabled: true, updatedBy: 'scheduler', updatedAt: '' }),
+      setTodayState: jest.fn().mockResolvedValue(undefined),
+      getTelegramMetadata: jest.fn().mockResolvedValue(null),
+      setTelegramMetadata: jest.fn().mockResolvedValue(undefined),
+      getHistory: jest.fn().mockResolvedValue([]),
+      addHistoryEntry: jest.fn().mockResolvedValue(undefined),
     };
 
     mockNotificationService = {

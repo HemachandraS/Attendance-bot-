@@ -3,6 +3,7 @@ import { LoggerService } from './logger';
 import { AttendanceExecutor } from './executor';
 import { startAdminServer } from './admin/app';
 import { JsonStorageService } from './storage';
+import { TelegramCommandService } from './telegram/TelegramCommandService';
 
 async function main() {
   const logger = new LoggerService();
@@ -33,6 +34,16 @@ async function main() {
   } else {
     logger.info('Starting HR One Attendance Bot in SCHEDULER Mode...');
     try {
+      if (config.ENABLE_NOTIFICATIONS) {
+        const telegramCommandService = new TelegramCommandService(
+          config,
+          logger,
+          storageService,
+          executor,
+        );
+        logger.info('Syncing latest Telegram commands before check-in execution...');
+        await telegramCommandService.pollForUpdates();
+      }
       await executor.execute(false);
     } catch (runError) {
       logger.error('Scheduler execution completed with error.', runError);

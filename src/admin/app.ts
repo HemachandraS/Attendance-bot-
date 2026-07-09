@@ -5,6 +5,7 @@ import { IConfig, ILogger, IStorageService } from '../types';
 import { AttendanceExecutor } from '../executor';
 import { AdminController } from './controllers/admin.controller';
 import { createAdminRouter } from './routes/admin.routes';
+import { TelegramCommandService } from '../telegram/TelegramCommandService';
 
 /**
  * Bootstraps and starts the Express Admin Web Portal.
@@ -56,6 +57,25 @@ export function startAdminServer(
   app.listen(config.ADMIN_PORT, () => {
     logger.info(`Admin Control Panel Web App running at http://localhost:${config.ADMIN_PORT}`);
   });
+
+  // Start background command polling if notifications are enabled
+  if (config.ENABLE_NOTIFICATIONS) {
+    const telegramCmdService = new TelegramCommandService(config, logger, storageService, executor);
+    logger.info('Starting background Telegram command sync loop (15s interval)...');
+
+    // Run an initial sync immediately upon server start
+    telegramCmdService.pollForUpdates().catch((err) => {
+      logger.error('Initial Telegram command sync failed', err);
+    });
+
+    setInterval(async () => {
+      try {
+        await telegramCmdService.pollForUpdates();
+      } catch (err) {
+        logger.error('Failed to sync Telegram commands in background loop', err);
+      }
+    }, 15000);
+  }
 
   return app;
 }
