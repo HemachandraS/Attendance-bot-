@@ -38,8 +38,10 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Create Env File
+        env:
+          APP_ENV_DATA: ${{ secrets.APP_ENV }}
         run: |
-          echo "${{ secrets.APP_ENV }}" > .env
+          echo "$APP_ENV_DATA" > .env
 
       - name: Run Attendance Bot
         run: |
