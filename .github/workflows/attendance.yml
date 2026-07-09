@@ -39,13 +39,13 @@ jobs:
 
       - name: Run Attendance Bot
         env:
-          HRONE_URL: ${{ secrets.HRONE_URL }}
+          HRONE_URL: ${{ secrets.HRONEURL }}
           USERNAME: ${{ secrets.USERNAME }}
           PASSWORD: ${{ secrets.PASSWORD }}
           HEADLESS: 'true'
           TIMEZONE: 'Asia/Kolkata'
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAMBOTTOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAMCHATID }}
           ENABLE_NOTIFICATIONS: 'true'
         run: |
           npm run build
